@@ -1,0 +1,23 @@
+services:
+  php:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: php-app
+    env_file:
+      - .env
+    environment:
+      - APP_ENV=dev
+      - NOTION_API_TOKEN=${NOTION_API_TOKEN}
+      - SPOTIFY_CLIENT_SECRET=${SPOTIFY_CLIENT_SECRET}
+      - SPOTIFY_CLIENT_ID=${SPOTIFY_CLIENT_ID}
+      - NOTION_DATABASE_ID=${NOTION_DATABASE_ID}
+      - SPOTIFY_REDIRECT_URI=${SPOTIFY_REDIRECT_URI}
+      - SPOTIFY_REFRESH_TOKEN=${SPOTIFY_REFRESH_TOKEN}
+    volumes:
+      - .:/var/www/html
+    entrypoint: ["sh", "-c", "cron && php -S 0.0.0.0:8000 -t public"]  # Start cron and Symfony server
+
+    # Optionally expose ports if you want to access the app via the browser
+    ports:
+      - "8000:8000"

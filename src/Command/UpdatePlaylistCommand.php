@@ -79,6 +79,15 @@ class UpdatePlaylistCommand extends Command
             return Command::FAILURE;
         }
     }
+
+    /**
+     * Fetches recent tracks for a list of artists from Spotify, filtering out duplicate songs by the same artist.
+     *
+     * @param SpotifyWebAPI $spotifyApi The Spotify API client.
+     * @param array $artistUris An array of artist URIs.
+     * @param string $searchType The type of search to perform ('single' or 'album').
+     * @return array An array of unique track URIs.
+     */
     private function getRecentArtistItems(SpotifyWebAPI $spotifyApi, array $artistUris, string $searchType): array
     {
         $recentTracks = [];

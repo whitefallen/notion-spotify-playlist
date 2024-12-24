@@ -1,4 +1,4 @@
-# Notion Spotify Playlist
+# Notion Spotify Playlist (Monthly Release Radar)
 
 This is a Symfony PHP project that utilizes Notion as an artist list storage system and the Spotify API to create a monthly playlist based on the Notion artist list. The project is built with PHP 8.1 and can be deployed via Docker.
 

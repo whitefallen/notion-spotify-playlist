@@ -136,7 +136,15 @@ class SpotifyService
             $playlistId = $playlist->id;
         }
 
-        $spotify->replacePlaylistTracks($playlistId, $trackUris);
+        if(count($trackUris) > 50) {
+            $trackUris = array_chunk($trackUris, 50);
+            foreach ($trackUris as $chunk) {
+                $spotify->addPlaylistTracks($playlistId, $chunk);
+            }
+        } else {
+            $spotify->addPlaylistTracks($playlistId, $trackUris);
+        }
+        //$spotify->replacePlaylistTracks($playlistId, $trackUris);
 
         return $playlistId;
     }

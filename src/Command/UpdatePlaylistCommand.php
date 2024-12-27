@@ -14,6 +14,7 @@ class UpdatePlaylistCommand extends Command
     protected static $defaultName = 'spotify:update-playlist';
     private SpotifyService $spotifyService;
     private NotionService $notionService;
+    private static array $blacklistedWords = ['instrumental', 'acoustic', 'live', 'karaoke', 'remix', 'cover', 'remaster', 'edition', 'version', 'session', 'demo', 'mix', 'track', 'original', 'edit', 'extended'];
 
     public function __construct(SpotifyService $spotifyService, NotionService $notionService)
     {
@@ -46,20 +47,10 @@ class UpdatePlaylistCommand extends Command
 
             // Step 3: Find recent tracks for the artists
             $output->writeln('Fetching recent tracks for artists...');
-            $singleTrackUris = $this->getRecentArtistItems($spotifyApi, $artistUris, 'single');
-            $albumTrackUris = $this->getRecentArtistItems($spotifyApi, $artistUris, 'album');
+            $singleTrackUris = $this->getRecentArtistItems($spotifyApi, $artistUris, 'single', $output);
+            $albumTrackUris = $this->getRecentArtistItems($spotifyApi, $artistUris, 'album', $output);
             $mergedTrackUris = array_merge($singleTrackUris, $albumTrackUris);
-
-            foreach ($mergedTrackUris as $trackUri) {
-                $track = $spotifyApi->getTrack($trackUri);
-                $trackName = $track->name;
-                $trackArtistId = $track->artists[0]->id;
-
-                if (!isset($trackCheck[$trackArtistId][$trackName])) {
-                    $trackUris[] = $trackUri;
-                    $trackCheck[$trackArtistId][$trackName] = true;
-                }
-            }
+            $trackUris = $this->filterUnwantedSongs($spotifyApi, $this->filterDuplicateTracks($spotifyApi, $mergedTrackUris));
 
             if (empty($trackUris)) {
                 $output->writeln('<error>No recent tracks found for the artists.</error>');
@@ -88,7 +79,7 @@ class UpdatePlaylistCommand extends Command
      * @param string $searchType The type of search to perform ('single' or 'album').
      * @return array An array of unique track URIs.
      */
-    private function getRecentArtistItems(SpotifyWebAPI $spotifyApi, array $artistUris, string $searchType): array
+    private function getRecentArtistItems(SpotifyWebAPI $spotifyApi, array $artistUris, string $searchType, OutputInterface $output): array
     {
         $recentTracks = [];
 
@@ -96,7 +87,7 @@ class UpdatePlaylistCommand extends Command
             try {
                 $artistId = str_replace('spotify:artist:', '', $artistUri->toString());
                 $items = $spotifyApi->getArtistAlbums($artistId, ['include_groups' => $searchType, 'limit' => 5]);
-
+                $output->writeln("Fetching recent $searchType items for artist: " . $items->items[0]->artists[0]->name);
                 $firstDayOfLastMonth = (new \DateTime('first day of last month'))->setTime(0, 0);
                 $lastDayOfLastMonth = (new \DateTime('last day of last month'))->setTime(23, 59, 59);
 
@@ -116,9 +107,53 @@ class UpdatePlaylistCommand extends Command
                 // Log error for a specific artist but continue with others
                 continue;
             }
-            sleep(10);
+            sleep(2);
         }
 
         return array_unique($recentTracks); // Avoid duplicate track URIs
+    }
+
+    private function filterDuplicateTracks(SpotifyWebAPI $spotifyApi, array $mergedTrackUris) : array
+    {
+        $trackUris = [];
+        $trackCheck = [];
+
+        foreach ($mergedTrackUris as $trackUri) {
+            $track = $spotifyApi->getTrack($trackUri);
+            $trackName = $track->name;
+            $trackArtistId = $track->artists[0]->id;
+
+            if (!isset($trackCheck[$trackArtistId][$trackName])) {
+                $trackUris[] = $trackUri;
+                $trackCheck[$trackArtistId][$trackName] = true;
+            }
+        }
+        return $trackUris;
+    }
+
+    /**
+     * Filter out songs that have
+     * "instrumental", "acoustic", "live", "karaoke", "remix", "cover" ," remaster",
+     * "edition", "version", "session", "demo", "mix", "track", "original", "edit", "extended"
+     * in the name and the album name
+     * @param SpotifyWebAPI $spotifyApi
+     * @param array $trackUris
+     * @return array
+     */
+    private function filterUnwantedSongs(SpotifyWebAPI $spotifyApi, array $trackUris) : array
+    {
+        // Filter the array based on the phpdoc description
+        return array_filter($trackUris, static function($trackUri) use ($spotifyApi) {
+            $track = $spotifyApi->getTrack($trackUri);
+            $trackName = strtolower($track->name);
+            $albumName = strtolower($track->album->name);
+
+            foreach (UpdatePlaylistCommand::$blacklistedWords as $word) {
+                if (str_contains($trackName, $word) || str_contains($albumName, $word)) {
+                    return false;
+                }
+            }
+            return true;
+        });
     }
 }

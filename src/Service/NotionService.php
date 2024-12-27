@@ -6,6 +6,7 @@ use Notion\Notion;
 use Notion\Databases;
 use Notion\Databases\Query;
 use Notion\Databases\Query\Result;
+use Notion\Pages\Page;
 
 class NotionService
 {
@@ -25,17 +26,14 @@ class NotionService
     {
         $artists = [];
         $database =  $this->notion->databases()->find($this->databaseId);
-        $queryResult = $this->notion->databases()->query(
+        $queryResult = $this->notion->databases()->queryAllPages(
             $database,
-            Query::create()
         );
 
         /** @var Result $result */
-        foreach ($queryResult->pages as $result) {
+        foreach ($queryResult as $result) {
             $properties = $result->properties();
-
             $spotifyUri = $properties->get('Spotify URI');
-
             if ($spotifyUri) {
                 $artists[] = $spotifyUri;
             }

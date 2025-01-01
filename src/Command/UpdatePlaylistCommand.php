@@ -5,13 +5,17 @@ namespace App\Command;
 use App\Service\NotionService;
 use App\Service\SpotifyService;
 use SpotifyWebAPI\SpotifyWebAPI;
+use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Output\OutputInterface;
 
+#[AsCommand(
+    name: 'spotify:update-playlist',
+    description: 'Updates the Spotify playlist for the current month using artists from Notion'
+)]
 class UpdatePlaylistCommand extends Command
 {
-    protected static $defaultName = 'spotify:update-playlist';
     private SpotifyService $spotifyService;
     private NotionService $notionService;
     private static array $blacklistedWords = ['instrumental', 'acoustic', 'live', 'karaoke', 'remix', 'cover', 'remaster', 'edition', 'version', 'session', 'demo', 'mix', 'track', 'original', 'edit', 'extended'];

@@ -30,4 +30,4 @@ RUN chmod 0644 /etc/cron.d/update-playlist
 RUN crontab /etc/cron.d/update-playlist
 
 # Start cron and Symfony
-ENTRYPOINT ["sh", "-c", "cron && php -S 0.0.0.0:8000 -t public"]
+ENTRYPOINT ["sh", "-c", "cron && php -S 0.0.0.0:3490 -t public"]

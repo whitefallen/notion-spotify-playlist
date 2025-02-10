@@ -17,8 +17,4 @@ services:
       - SPOTIFY_REFRESH_TOKEN=${SPOTIFY_REFRESH_TOKEN}
     volumes:
       - .:/var/www/html
-    entrypoint: ["sh", "-c", "cron && php -S 0.0.0.0:3490 -t public"]  # Start cron and Symfony server
-
-    # Optionally expose ports if you want to access the app via the browser
-    ports:
-      - "3490:3490"
+    entrypoint: ["sh", "-c", "cron && php -S 0.0.0.0:3490 -t public"] # Start cron and Symfony server

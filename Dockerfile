@@ -13,9 +13,6 @@ WORKDIR /var/www/html
 # Copy your application files into the container
 COPY . /var/www/html
 
-RUN chown -R www-data:www-data /var/www/html
-USER www-data
-
 # Install Composer dependencies
 RUN composer install
 

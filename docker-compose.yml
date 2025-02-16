@@ -17,4 +17,8 @@ services:
       - SPOTIFY_REFRESH_TOKEN=${SPOTIFY_REFRESH_TOKEN}
     volumes:
       - .:/var/www/html
-    entrypoint: ["sh", "-c", "cron && php -S 0.0.0.0:3490 -t public"] # Start cron and Symfony server
+    entrypoint: [
+        "sh",
+        "-c",
+        "service cron start && php -S 0.0.0.0:3490 -t public",
+      ] # Start cron and Symfony server

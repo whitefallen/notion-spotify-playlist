@@ -13,6 +13,9 @@ WORKDIR /var/www/html
 # Copy your application files into the container
 COPY . /var/www/html
 
+RUN chown -R www-data:www-data /var/www/html
+USER www-data
+
 # Install Composer dependencies
 RUN composer install
 
@@ -30,4 +33,4 @@ RUN chmod 0644 /etc/cron.d/update-playlist
 RUN crontab /etc/cron.d/update-playlist
 
 # Start cron and Symfony
-ENTRYPOINT ["sh", "-c", "cron && php -S 0.0.0.0:3490 -t public"]
+ENTRYPOINT ["sh", "-c", "service cron && php -S 0.0.0.0:3490 -t public"]

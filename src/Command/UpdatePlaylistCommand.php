@@ -118,7 +118,7 @@ class UpdatePlaylistCommand extends Command
             } catch (\Exception $e) {
                 $output->writeln("Unexpected error: " . $e->getMessage());
             }
-            sleep(15);
+            sleep(30);
         }
 
         return array_unique($recentTracks); // Avoid duplicate track URIs

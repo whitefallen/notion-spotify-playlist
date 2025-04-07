@@ -29,5 +29,8 @@ RUN chmod 0644 /etc/cron.d/update-playlist
 # Apply the cron job
 RUN crontab /etc/cron.d/update-playlist
 
+# Ensure cron log file exists
+RUN touch /var/log/cron.log && chmod 0644 /var/log/cron.log
+
 # Start cron and Symfony
-ENTRYPOINT ["sh", "-c", "service cron && php -S 0.0.0.0:3490 -t public"]
+ENTRYPOINT ["sh", "-c", "cron -f & php -S 0.0.0.0:3490 -t public"]

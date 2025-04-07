@@ -95,7 +95,6 @@ class UpdatePlaylistCommand extends Command
                 $lastDayOfLastMonth = (new \DateTime('last day of last month'))->setTime(23, 59, 59);
 
                 foreach ($items->items as $album) {
-
                     $releaseDate = new \DateTime($album->release_date);
 
                     if ($releaseDate >= $firstDayOfLastMonth && $releaseDate <= $lastDayOfLastMonth) {
@@ -106,9 +105,18 @@ class UpdatePlaylistCommand extends Command
                         }
                     }
                 }
+            } catch (\SpotifyWebAPI\SpotifyWebAPIException $e) {
+                if ($e->getCode() === 401) { // Token expired
+                    $output->writeln("Access token expired. Refreshing token...");
+                    $this->spotifyService->refreshAccessToken();
+                    $spotifyApi->setAccessToken($this->spotifyService->getSpotifyAPI()->getAccessToken());
+                    $output->writeln("Token refreshed. Retrying...");
+                    continue; // Retry the current artist
+                } else {
+                    $output->writeln("Error fetching data for artist: " . $artistUri->toString() . ". Skipping...");
+                }
             } catch (\Exception $e) {
-                // Log error for a specific artist but continue with others
-                continue;
+                $output->writeln("Unexpected error: " . $e->getMessage());
             }
             sleep(15);
         }

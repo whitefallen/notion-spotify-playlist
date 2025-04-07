@@ -118,7 +118,7 @@ class SpotifyService
         $spotify = $this->getSpotifyAPI();
         $userId = $spotify->me()->id;
 
-        $playlists = $spotify->getUserPlaylists($userId,['limit' => 50]);
+        $playlists = $spotify->getUserPlaylists($userId, ['limit' => 50]);
         $playlistId = null;
 
         foreach ($playlists->items as $playlist) {
@@ -136,7 +136,7 @@ class SpotifyService
             $playlistId = $playlist->id;
         }
 
-        if(count($trackUris) > 50) {
+        if (count($trackUris) > 50) {
             $trackUris = array_chunk($trackUris, 50);
             foreach ($trackUris as $chunk) {
                 $spotify->addPlaylistTracks($playlistId, $chunk);
@@ -147,5 +147,13 @@ class SpotifyService
         //$spotify->replacePlaylistTracks($playlistId, $trackUris);
 
         return $playlistId;
+    }
+
+    /**
+     * @throws Exception
+     */
+    public function refreshAccessToken(): void
+    {
+        $this->refreshAccessTokenIfNeeded();
     }
 }

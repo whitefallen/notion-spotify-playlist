@@ -109,7 +109,15 @@ class SpotifyService
             throw new \RuntimeException("Error initializing Spotify API: " . $e->getMessage());
         }
     }
-
+    /**
+     * Expose the Session object.
+     *
+     * @return Session
+     */
+    public function getSession(): Session
+    {
+        return $this->session;
+    }
     /**
      * @throws Exception
      */

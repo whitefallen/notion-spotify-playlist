@@ -109,7 +109,7 @@ class UpdatePlaylistCommand extends Command
                 if ($e->getCode() === 401) { // Token expired
                     $output->writeln("Access token expired. Refreshing token...");
                     $this->spotifyService->refreshAccessToken();
-                    $spotifyApi->setAccessToken($this->spotifyService->getSpotifyAPI()->getAccessToken());
+                    $spotifyApi->setAccessToken($this->spotifyService->getSession()->getAccessToken());
                     $output->writeln("Token refreshed. Retrying...");
                     continue; // Retry the current artist
                 } else {

@@ -68,7 +68,6 @@ class UpdatePlaylistCommand extends Command
 
             $output->writeln("<info>Playlist updated successfully! Playlist ID: $playlistId</info>");
             return Command::SUCCESS;
-
         } catch (\Exception $e) {
             $output->writeln('<error>Error: ' . $e->getMessage() . '</error>');
             return Command::FAILURE;
@@ -111,13 +110,13 @@ class UpdatePlaylistCommand extends Command
                 // Log error for a specific artist but continue with others
                 continue;
             }
-            sleep(2);
+            sleep(15);
         }
 
         return array_unique($recentTracks); // Avoid duplicate track URIs
     }
 
-    private function filterDuplicateTracks(SpotifyWebAPI $spotifyApi, array $mergedTrackUris) : array
+    private function filterDuplicateTracks(SpotifyWebAPI $spotifyApi, array $mergedTrackUris): array
     {
         $trackUris = [];
         $trackCheck = [];
@@ -144,10 +143,10 @@ class UpdatePlaylistCommand extends Command
      * @param array $trackUris
      * @return array
      */
-    private function filterUnwantedSongs(SpotifyWebAPI $spotifyApi, array $trackUris) : array
+    private function filterUnwantedSongs(SpotifyWebAPI $spotifyApi, array $trackUris): array
     {
         // Filter the array based on the phpdoc description
-        return array_filter($trackUris, static function($trackUri) use ($spotifyApi) {
+        return array_filter($trackUris, static function ($trackUri) use ($spotifyApi) {
             $track = $spotifyApi->getTrack($trackUri);
             $trackName = strtolower($track->name);
             $albumName = strtolower($track->album->name);

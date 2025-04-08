@@ -99,7 +99,7 @@ class UpdatePlaylistCommand extends Command
 
                     if ($releaseDate >= $firstDayOfLastMonth && $releaseDate <= $lastDayOfLastMonth) {
                         $tracks = $spotifyApi->getAlbumTracks($album->id, ['limit' => 50]);
-
+                        $output->writeln("Found " . count($tracks->items) . " tracks in album: " . $album->name);
                         foreach ($tracks->items as $track) {
                             $recentTracks[] = $track->uri;
                         }

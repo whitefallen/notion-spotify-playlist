@@ -53,11 +53,13 @@ class SpotifyService
      */
     private function saveTokens(string $accessToken, string $refreshToken, int $expiresAt): void
     {
-        file_put_contents($this->tokenFile, json_encode([
+        $tokenData = [
             'access_token' => $accessToken,
             'refresh_token' => $refreshToken,
             'expires_at' => $expiresAt,
-        ], JSON_THROW_ON_ERROR));
+        ];
+
+        file_put_contents($this->tokenFile, json_encode($tokenData, JSON_THROW_ON_ERROR));
     }
 
     /**
@@ -81,11 +83,20 @@ class SpotifyService
         $currentTime = time();
 
         if ($tokens['expires_at'] <= $currentTime) {
+            error_log("Refreshing access token...");
+            error_log("Old tokens: " . json_encode($tokens));
+
             $this->session->refreshAccessToken($tokens['refresh_token']);
-            $tokens['access_token'] = $this->session->getAccessToken();
+            $newAccessToken = $this->session->getAccessToken();
+            $newRefreshToken = $this->session->getRefreshToken() ?? $tokens['refresh_token'];
+
+            $tokens['access_token'] = $newAccessToken;
+            $tokens['refresh_token'] = $newRefreshToken;
             $tokens['expires_at'] = $this->session->getTokenExpiration();
 
             $this->saveTokens($tokens['access_token'], $tokens['refresh_token'], $tokens['expires_at']);
+
+            error_log("New tokens: " . json_encode($tokens));
         }
 
         $this->spotify->setAccessToken($tokens['access_token']);

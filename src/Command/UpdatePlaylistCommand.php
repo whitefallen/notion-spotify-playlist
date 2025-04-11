@@ -89,20 +89,46 @@ class UpdatePlaylistCommand extends Command
         foreach ($artistUris as $artistUri) {
             try {
                 $artistId = str_replace('spotify:artist:', '', $artistUri->toString());
-                $items = $spotifyApi->getArtistAlbums($artistId, ['include_groups' => $searchType, 'limit' => 5]);
-                $output->writeln("Fetching recent $searchType items for artist: " . $items->items[0]->artists[0]->name);
+                $offset = 0;
+                $limit = 20;
+                $allAlbums = [];
+
+                // Fetch all albums using pagination
+                do {
+                    $albums = $spotifyApi->getArtistAlbums($artistId, [
+                        'include_groups' => $searchType, // e.g., 'album,single'
+                        'limit' => $limit,
+                        'offset' => $offset,
+                    ]);
+
+                    $allAlbums = array_merge($allAlbums, $albums->items);
+                    $offset += $limit;
+                } while (count($albums->items) > 0); // Continue until no more albums are returned
+
+                // Filter albums by release date
                 $firstDayOfLastMonth = (new \DateTime('first day of last month'))->setTime(0, 0);
                 $lastDayOfLastMonth = (new \DateTime('last day of last month'))->setTime(23, 59, 59);
 
-                foreach ($items->items as $album) {
+                $filteredAlbums = array_filter($allAlbums, function ($album) use ($firstDayOfLastMonth, $lastDayOfLastMonth) {
                     $releaseDate = new \DateTime($album->release_date);
+                    return $releaseDate >= $firstDayOfLastMonth && $releaseDate <= $lastDayOfLastMonth;
+                });
 
-                    if ($releaseDate >= $firstDayOfLastMonth && $releaseDate <= $lastDayOfLastMonth) {
-                        $tracks = $spotifyApi->getAlbumTracks($album->id, ['limit' => 50]);
-                        $output->writeln("Found " . count($tracks->items) . " tracks in album: " . $album->name);
-                        foreach ($tracks->items as $track) {
-                            $recentTracks[] = $track->uri;
-                        }
+                // Collect track IDs for batching
+                $trackIds = [];
+                foreach ($filteredAlbums as $album) {
+                    $output->writeln("Processing album: {$album->name}...");
+                    $albumTracks = $spotifyApi->getAlbumTracks($album->id, ['limit' => 50]);
+                    foreach ($albumTracks->items as $track) {
+                        $trackIds[] = $track->id;
+                    }
+                }
+
+                // Fetch track details in batches of 50
+                foreach (array_chunk($trackIds, 50) as $trackBatch) {
+                    $tracks = $spotifyApi->getTracks($trackBatch);
+                    foreach ($tracks->tracks as $track) {
+                        $recentTracks[] = $track->uri;
                     }
                 }
             } catch (\SpotifyWebAPI\SpotifyWebAPIException $e) {
@@ -118,7 +144,6 @@ class UpdatePlaylistCommand extends Command
             } catch (\Exception $e) {
                 $output->writeln("Unexpected error: " . $e->getMessage());
             }
-            sleep(120);
         }
 
         return array_unique($recentTracks); // Avoid duplicate track URIs

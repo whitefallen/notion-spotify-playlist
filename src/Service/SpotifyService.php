@@ -11,6 +11,7 @@ class SpotifyService
 {
     private Session $session;
     private SpotifyWebAPI $spotify;
+    private SpotifyWebAPIWrapper $spotifyWrapper;
     private string $tokenFile;
 
     public function __construct()
@@ -21,7 +22,8 @@ class SpotifyService
             $_ENV['SPOTIFY_REDIRECT_URI']
         );
 
-        $this->spotify = new SpotifyWebAPI();
+        $spotifyApi = new SpotifyWebAPI();
+        $this->spotifyWrapper = new SpotifyWebAPIWrapper($spotifyApi);
         $this->tokenFile = __DIR__ . '/../../tokens.json';
     }
 
@@ -99,13 +101,13 @@ class SpotifyService
             error_log("New tokens: " . json_encode($tokens));
         }
 
-        $this->spotify->setAccessToken($tokens['access_token']);
+        $this->spotifyWrapper->getSpotifyAPI()->setAccessToken($tokens['access_token']);
     }
 
     /**
      * @throws Exception
      */
-    public function getSpotifyAPI(): SpotifyWebAPI
+    public function getSpotifyAPI(): SpotifyWebAPIWrapper
     {
         try {
             $tokens = $this->loadTokens();
@@ -115,7 +117,9 @@ class SpotifyService
 
             $this->refreshAccessTokenIfNeeded();
 
-            return $this->spotify;
+            $this->spotifyWrapper->getSpotifyAPI()->setAccessToken($this->session->getAccessToken());
+
+            return $this->spotifyWrapper;
         } catch (Exception $e) {
             throw new \RuntimeException("Error initializing Spotify API: " . $e->getMessage());
         }
@@ -135,9 +139,9 @@ class SpotifyService
     public function createOrUpdatePlaylist(string $playlistName, array $trackUris): string
     {
         $spotify = $this->getSpotifyAPI();
-        $userId = $spotify->me()->id;
+        $userId = $spotify->getSpotifyAPI()->me()->id;
 
-        $playlists = $spotify->getUserPlaylists($userId, ['limit' => 50]);
+        $playlists = $spotify->getSpotifyAPI()->getUserPlaylists($userId, ['limit' => 50]);
         $playlistId = null;
 
         foreach ($playlists->items as $playlist) {
@@ -148,20 +152,17 @@ class SpotifyService
         }
 
         if (!$playlistId) {
-            $playlist = $spotify->createPlaylist([
+            $playlist = $spotify->getSpotifyAPI()->createPlaylist([
                 'name' => $playlistName,
                 'description' => 'Monthly playlist generated automatically.',
             ]);
             $playlistId = $playlist->id;
         }
 
-        if (count($trackUris) > 50) {
-            $trackUris = array_chunk($trackUris, 50);
-            foreach ($trackUris as $chunk) {
-                $spotify->addPlaylistTracks($playlistId, $chunk);
-            }
-        } else {
-            $spotify->addPlaylistTracks($playlistId, $trackUris);
+        // Add tracks to the playlist in chunks of 50
+        $trackUrisChunks = array_chunk($trackUris, 50);
+        foreach ($trackUrisChunks as $chunk) {
+            $spotify->getSpotifyAPI()->addPlaylistTracks($playlistId, $chunk);
         }
         //$spotify->replacePlaylistTracks($playlistId, $trackUris);
 

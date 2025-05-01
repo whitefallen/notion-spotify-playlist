@@ -4,6 +4,7 @@ namespace App\Command;
 
 use App\Service\NotionService;
 use App\Service\SpotifyService;
+use App\Service\SpotifyWebAPIWrapper;
 use SpotifyWebAPI\SpotifyWebAPI;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
@@ -82,7 +83,7 @@ class UpdatePlaylistCommand extends Command
      * @param string $searchType The type of search to perform ('single' or 'album').
      * @return array An array of unique track URIs.
      */
-    private function getRecentArtistItems(SpotifyWebAPI $spotifyApi, array $artistUris, string $searchType, OutputInterface $output): array
+    private function getRecentArtistItems(SpotifyWebAPIWrapper $spotifyApi, array $artistUris, string $searchType, OutputInterface $output): array
     {
         $recentTracks = [];
 
@@ -95,14 +96,28 @@ class UpdatePlaylistCommand extends Command
 
                 // Fetch all albums using pagination
                 do {
-                    $albums = $spotifyApi->getArtistAlbums($artistId, [
-                        'include_groups' => $searchType, // e.g., 'album,single'
-                        'limit' => $limit,
-                        'offset' => $offset,
-                    ]);
+                    try {
+                        $albums = $spotifyApi->getArtistAlbums($artistId, [
+                            'include_groups' => $searchType, // e.g., 'album,single'
+                            'limit' => $limit,
+                            'offset' => $offset,
+                        ]);
 
-                    $allAlbums = array_merge($allAlbums, $albums->items);
-                    $offset += $limit;
+                        $allAlbums = array_merge($allAlbums, $albums->items);
+                        $offset += $limit;
+
+                        // Introduce a small delay between requests to ease rate limits
+                        usleep(500_000); // 500 milliseconds (0.5 seconds)
+                    } catch (\SpotifyWebAPI\SpotifyWebAPIException $e) {
+                        if ($e->getCode() === 429) { // Rate limit exceeded
+                            $retryAfter = $spotifyApi->getLastResponseHeaders()['Retry-After'] ?? 1; // Retrieve the Retry-After header
+                            $output->writeln("Rate limit exceeded. Retrying after {$retryAfter} seconds...");
+                            sleep((int) $retryAfter);
+                            continue; // Retry the current request
+                        } else {
+                            throw $e; // Re-throw other exceptions
+                        }
+                    }
                 } while (count($albums->items) > 0); // Continue until no more albums are returned
 
                 // Filter albums by release date
@@ -149,7 +164,7 @@ class UpdatePlaylistCommand extends Command
         return array_unique($recentTracks); // Avoid duplicate track URIs
     }
 
-    private function filterDuplicateTracks(SpotifyWebAPI $spotifyApi, array $mergedTrackUris): array
+    private function filterDuplicateTracks(SpotifyWebAPIWrapper $spotifyApi, array $mergedTrackUris): array
     {
         $trackUris = [];
         $trackCheck = [];
@@ -176,16 +191,13 @@ class UpdatePlaylistCommand extends Command
      * @param array $trackUris
      * @return array
      */
-    private function filterUnwantedSongs(SpotifyWebAPI $spotifyApi, array $trackUris): array
+    private function filterUnwantedSongs(SpotifyWebAPIWrapper $spotifyApi, array $trackUris): array
     {
-        // Filter the array based on the phpdoc description
-        return array_filter($trackUris, static function ($trackUri) use ($spotifyApi) {
+        // Filter out tracks with blacklisted words in their names
+        return array_filter($trackUris, function ($trackUri) use ($spotifyApi) {
             $track = $spotifyApi->getTrack($trackUri);
-            $trackName = strtolower($track->name);
-            $albumName = strtolower($track->album->name);
-
-            foreach (UpdatePlaylistCommand::$blacklistedWords as $word) {
-                if (str_contains($trackName, $word) || str_contains($albumName, $word)) {
+            foreach (self::$blacklistedWords as $word) {
+                if (stripos($track->name, $word) !== false) {
                     return false;
                 }
             }

@@ -107,16 +107,12 @@ class UpdatePlaylistCommand extends Command
                         $offset += $limit;
 
                         // Introduce a small delay between requests to ease rate limits
-                        usleep(500_000); // 500 milliseconds (0.5 seconds)
+                        usleep(1000_000); // 1000 milliseconds (1 seconds)
                     } catch (\SpotifyWebAPI\SpotifyWebAPIException $e) {
-                        if ($e->getCode() === 429) { // Rate limit exceeded
-                            $retryAfter = $spotifyApi->getLastResponseHeaders()['Retry-After'] ?? 1; // Retrieve the Retry-After header
-                            $output->writeln("Rate limit exceeded. Retrying after {$retryAfter} seconds...");
-                            sleep((int) $retryAfter);
-                            continue; // Retry the current request
-                        } else {
-                            throw $e; // Re-throw other exceptions
-                        }
+                        $retryAfter = $spotifyApi->getLastResponseHeaders()['Retry-After'] ?? 1; // Retrieve the Retry-After header
+                        $output->writeln("Rate limit exceeded. Retrying after {$retryAfter} seconds...");
+                        sleep((int) $retryAfter);
+                        continue; // Retry the current request
                     }
                 } while (count($albums->items) > 0); // Continue until no more albums are returned
 

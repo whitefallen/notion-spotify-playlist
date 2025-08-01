@@ -95,6 +95,9 @@ class UpdatePlaylistCommand extends Command
                 $allAlbums = [];
 
                 // Fetch all albums using pagination
+                $maxRetries = 3;
+                $retryCount = 0;
+                
                 do {
                     try {
                         $albums = $spotifyApi->getArtistAlbums($artistId, [
@@ -105,14 +108,27 @@ class UpdatePlaylistCommand extends Command
 
                         $allAlbums = array_merge($allAlbums, $albums->items);
                         $offset += $limit;
+                        $retryCount = 0; // Reset retry count on success
 
                         // Introduce a small delay between requests to ease rate limits
                         usleep(1000_000); // 1000 milliseconds (1 seconds)
                     } catch (\SpotifyWebAPI\SpotifyWebAPIException $e) {
-                        $retryAfter = $spotifyApi->getLastResponseHeaders()['Retry-After'] ?? 1; // Retrieve the Retry-After header
-                        $output->writeln("Rate limit exceeded. Retrying after {$retryAfter} seconds...");
-                        sleep((int) $retryAfter);
-                        continue; // Retry the current request
+                        if ($e->getCode() === 429) { // Rate limit error
+                            $retryCount++;
+                            if ($retryCount > $maxRetries) {
+                                $output->writeln("Maximum retries ({$maxRetries}) exceeded for artist {$artistId}. Skipping...");
+                                break;
+                            }
+                            
+                            $retryAfter = $spotifyApi->getLastResponseHeaders()['Retry-After'] ?? 1;
+                            $backoffTime = $retryAfter * $retryCount; // Exponential backoff
+                            $output->writeln("Rate limit exceeded (attempt {$retryCount}/{$maxRetries}). Retrying after {$backoffTime} seconds...");
+                            sleep($backoffTime);
+                            continue; // Retry the current request
+                        } else {
+                            // Non-rate-limit error, re-throw
+                            throw $e;
+                        }
                     }
                 } while (count($albums->items) > 0); // Continue until no more albums are returned
 
@@ -129,18 +145,74 @@ class UpdatePlaylistCommand extends Command
                 $trackIds = [];
                 foreach ($filteredAlbums as $album) {
                     $output->writeln("Processing album: {$album->name}...");
-                    $albumTracks = $spotifyApi->getAlbumTracks($album->id, ['limit' => 50]);
-                    foreach ($albumTracks->items as $track) {
-                        $trackIds[] = $track->id;
+                    
+                    // Add rate limiting protection for album tracks
+                    $albumTracksRetries = 0;
+                    $maxAlbumTracksRetries = 3;
+                    
+                    while ($albumTracksRetries <= $maxAlbumTracksRetries) {
+                        try {
+                            $albumTracks = $spotifyApi->getAlbumTracks($album->id, ['limit' => 50]);
+                            foreach ($albumTracks->items as $track) {
+                                $trackIds[] = $track->id;
+                            }
+                            break; // Success, exit retry loop
+                        } catch (\SpotifyWebAPI\SpotifyWebAPIException $e) {
+                            if ($e->getCode() === 429) { // Rate limit error
+                                $albumTracksRetries++;
+                                if ($albumTracksRetries > $maxAlbumTracksRetries) {
+                                    $output->writeln("Maximum retries exceeded for album tracks. Skipping album: {$album->name}");
+                                    break;
+                                }
+                                
+                                $retryAfter = $spotifyApi->getLastResponseHeaders()['Retry-After'] ?? 1;
+                                $backoffTime = $retryAfter * $albumTracksRetries;
+                                $output->writeln("Rate limit exceeded for album tracks (attempt {$albumTracksRetries}/{$maxAlbumTracksRetries}). Retrying after {$backoffTime} seconds...");
+                                sleep($backoffTime);
+                            } else {
+                                // Non-rate-limit error, re-throw
+                                throw $e;
+                            }
+                        }
                     }
+                    
+                    // Small delay between album processing
+                    usleep(500_000); // 500ms delay
                 }
 
                 // Fetch track details in batches of 50
                 foreach (array_chunk($trackIds, 50) as $trackBatch) {
-                    $tracks = $spotifyApi->getTracks($trackBatch);
-                    foreach ($tracks->tracks as $track) {
-                        $recentTracks[] = $track->uri;
+                    $trackDetailsRetries = 0;
+                    $maxTrackDetailsRetries = 3;
+                    
+                    while ($trackDetailsRetries <= $maxTrackDetailsRetries) {
+                        try {
+                            $tracks = $spotifyApi->getTracks($trackBatch);
+                            foreach ($tracks->tracks as $track) {
+                                $recentTracks[] = $track->uri;
+                            }
+                            break; // Success, exit retry loop
+                        } catch (\SpotifyWebAPI\SpotifyWebAPIException $e) {
+                            if ($e->getCode() === 429) { // Rate limit error
+                                $trackDetailsRetries++;
+                                if ($trackDetailsRetries > $maxTrackDetailsRetries) {
+                                    $output->writeln("Maximum retries exceeded for track details. Skipping batch...");
+                                    break;
+                                }
+                                
+                                $retryAfter = $spotifyApi->getLastResponseHeaders()['Retry-After'] ?? 1;
+                                $backoffTime = $retryAfter * $trackDetailsRetries;
+                                $output->writeln("Rate limit exceeded for track details (attempt {$trackDetailsRetries}/{$maxTrackDetailsRetries}). Retrying after {$backoffTime} seconds...");
+                                sleep($backoffTime);
+                            } else {
+                                // Non-rate-limit error, re-throw
+                                throw $e;
+                            }
+                        }
                     }
+                    
+                    // Small delay between batch processing
+                    usleep(500_000); // 500ms delay
                 }
             } catch (\SpotifyWebAPI\SpotifyWebAPIException $e) {
                 if ($e->getCode() === 401) { // Token expired
@@ -166,14 +238,40 @@ class UpdatePlaylistCommand extends Command
         $trackCheck = [];
 
         foreach ($mergedTrackUris as $trackUri) {
-            $track = $spotifyApi->getTrack($trackUri);
-            $trackName = $track->name;
-            $trackArtistId = $track->artists[0]->id;
+            $trackDetailsRetries = 0;
+            $maxTrackDetailsRetries = 3;
+            
+            while ($trackDetailsRetries <= $maxTrackDetailsRetries) {
+                try {
+                    $track = $spotifyApi->getTrack($trackUri);
+                    $trackName = $track->name;
+                    $trackArtistId = $track->artists[0]->id;
 
-            if (!isset($trackCheck[$trackArtistId][$trackName])) {
-                $trackUris[] = $trackUri;
-                $trackCheck[$trackArtistId][$trackName] = true;
+                    if (!isset($trackCheck[$trackArtistId][$trackName])) {
+                        $trackUris[] = $trackUri;
+                        $trackCheck[$trackArtistId][$trackName] = true;
+                    }
+                    break; // Success, exit retry loop
+                } catch (\SpotifyWebAPI\SpotifyWebAPIException $e) {
+                    if ($e->getCode() === 429) { // Rate limit error
+                        $trackDetailsRetries++;
+                        if ($trackDetailsRetries > $maxTrackDetailsRetries) {
+                            // Skip this track if we can't fetch its details
+                            break;
+                        }
+                        
+                        $retryAfter = $spotifyApi->getLastResponseHeaders()['Retry-After'] ?? 1;
+                        $backoffTime = $retryAfter * $trackDetailsRetries;
+                        sleep($backoffTime);
+                    } else {
+                        // Non-rate-limit error, skip this track
+                        break;
+                    }
+                }
             }
+            
+            // Small delay between track processing
+            usleep(100_000); // 100ms delay
         }
         return $trackUris;
     }
@@ -191,12 +289,37 @@ class UpdatePlaylistCommand extends Command
     {
         // Filter out tracks with blacklisted words in their names
         return array_filter($trackUris, function ($trackUri) use ($spotifyApi) {
-            $track = $spotifyApi->getTrack($trackUri);
-            foreach (self::$blacklistedWords as $word) {
-                if (stripos($track->name, $word) !== false) {
-                    return false;
+            $trackDetailsRetries = 0;
+            $maxTrackDetailsRetries = 3;
+            
+            while ($trackDetailsRetries <= $maxTrackDetailsRetries) {
+                try {
+                    $track = $spotifyApi->getTrack($trackUri);
+                    foreach (self::$blacklistedWords as $word) {
+                        if (stripos($track->name, $word) !== false) {
+                            return false;
+                        }
+                    }
+                    return true; // Track passed filtering
+                } catch (\SpotifyWebAPI\SpotifyWebAPIException $e) {
+                    if ($e->getCode() === 429) { // Rate limit error
+                        $trackDetailsRetries++;
+                        if ($trackDetailsRetries > $maxTrackDetailsRetries) {
+                            // If we can't fetch track details, include it to be safe
+                            return true;
+                        }
+                        
+                        $retryAfter = $spotifyApi->getLastResponseHeaders()['Retry-After'] ?? 1;
+                        $backoffTime = $retryAfter * $trackDetailsRetries;
+                        sleep($backoffTime);
+                    } else {
+                        // Non-rate-limit error, include track to be safe
+                        return true;
+                    }
                 }
             }
+            
+            // If we get here, include the track to be safe
             return true;
         });
     }

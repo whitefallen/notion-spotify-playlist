@@ -86,7 +86,6 @@ class SpotifyService
 
         if ($tokens['expires_at'] <= $currentTime) {
             error_log("Refreshing access token...");
-            error_log("Old tokens: " . json_encode($tokens));
 
             $this->session->refreshAccessToken($tokens['refresh_token']);
             $newAccessToken = $this->session->getAccessToken();
@@ -97,8 +96,6 @@ class SpotifyService
             $tokens['expires_at'] = $this->session->getTokenExpiration();
 
             $this->saveTokens($tokens['access_token'], $tokens['refresh_token'], $tokens['expires_at']);
-
-            error_log("New tokens: " . json_encode($tokens));
         }
 
         $this->spotifyWrapper->getSpotifyAPI()->setAccessToken($tokens['access_token']);
